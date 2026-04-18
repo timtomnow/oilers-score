@@ -11,6 +11,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Oilers Score">
   <link rel="apple-touch-icon" href="icon.svg">
+  <script src="config.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -176,10 +177,15 @@
     /* ── Play-by-play ── */
     .pbp-play { padding:7px 0; border-top:1px solid #f2f2f2; }
     .pbp-play:first-child { border-top:none; }
+    .pbp-play-row { display:flex; align-items:flex-start; gap:6px; }
+    .pbp-team-tag { font-size:10px; font-weight:800; letter-spacing:.5px; min-width:30px; padding-top:1px; flex-shrink:0; }
+    .pbp-play-body { flex:1; }
     .pbp-inn { font-size:10px; color:#bbb; font-weight:700; letter-spacing:.3px; }
     .pbp-desc { font-size:12px; color:#444; line-height:1.4; margin-top:2px; }
-    .pbp-goal .pbp-desc { color:#c0392b; font-weight:700; }
-    .pbp-penalty .pbp-desc { color:#b07800; font-weight:600; }
+    .pbp-goal .pbp-desc { font-weight:700; }
+    .pbp-penalty .pbp-desc { font-weight:600; }
+    .pbp-away-play .pbp-team-tag, .pbp-away-play .pbp-desc { color:#3b82f6; }
+    .pbp-home-play .pbp-team-tag, .pbp-home-play .pbp-desc { color:#FF4C00; }
     .see-all-btn { display:block; text-align:center; color:#FF4C00; font-size:12px; font-weight:600; padding:8px 0 2px; cursor:pointer; background:none; border:none; width:100%; -webkit-tap-highlight-color:transparent; }
 
     /* ── Last 5 games list ── */
@@ -267,13 +273,10 @@
 </div>
 
 <script>
-  const TEAM_ABBREV     = 'EDM';
-  const TEAM_ID         = 22;   // Edmonton Oilers
-  const DIVISION_ABBREV = 'P';  // Pacific
-
-  // Replace with your deployed Cloudflare Worker URL, e.g.:
-  // const NHL_API_BASE = 'https://oilers-score-proxy.YOUR-SUBDOMAIN.workers.dev';
-  const NHL_API_BASE = 'https://api-web.nhle.com'; // direct (no CORS) — swap for worker URL
+  const TEAM_ABBREV     = CONFIG.TEAM_ABBREV;
+  const TEAM_ID         = CONFIG.TEAM_ID;
+  const DIVISION_ABBREV = CONFIG.DIVISION_ABBREV;
+  const NHL_API_BASE    = CONFIG.NHL_API_BASE;
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -409,7 +412,8 @@
         const name = typeof p.name === 'object' ? p.name.default : (p.name ?? '');
         const last = name.split(' ').slice(1).join(' ') || name;
         const pos = p.position ?? '';
-        html += `<tr><td>${last}<span style="color:#bbb;font-size:9px;margin-left:3px">${pos}</span></td>
+        const num = p.sweaterNumber != null ? `<span style="color:#bbb;font-size:10px;font-weight:700;margin-right:5px;display:inline-block;min-width:16px">${p.sweaterNumber}</span>` : '';
+        html += `<tr><td>${num}${last}<span style="color:#bbb;font-size:9px;margin-left:3px">${pos}</span></td>
           <td>${p.goals ?? 0}</td><td>${p.assists ?? 0}</td><td>${p.points ?? 0}</td>
           <td>${p.plusMinus >= 0 ? '+' : ''}${p.plusMinus ?? 0}</td>
           <td>${p.pim ?? 0}</td><td>${p.shots ?? 0}</td></tr>`;
@@ -426,7 +430,8 @@
         const name = typeof g.name === 'object' ? g.name.default : (g.name ?? '');
         const last = name.split(' ').slice(1).join(' ') || name;
         const svPct = g.savePctg != null ? (g.savePctg * 100).toFixed(1) + '%' : '—';
-        html += `<tr><td>${last}${g.starter ? '<span style="color:#FF4C00;font-size:9px;margin-left:3px">★</span>' : ''}</td>
+        const num = g.sweaterNumber != null ? `<span style="color:#bbb;font-size:10px;font-weight:700;margin-right:5px;display:inline-block;min-width:16px">${g.sweaterNumber}</span>` : '';
+        html += `<tr><td>${num}${last}${g.starter ? '<span style="color:#FF4C00;font-size:9px;margin-left:3px">★</span>' : ''}</td>
           <td>${g.shotsAgainst ?? '—'}</td><td>${g.goalsAgainst ?? '—'}</td>
           <td>${g.saves ?? '—'}</td><td>${svPct}</td></tr>`;
       }
@@ -493,7 +498,7 @@
   }
 
   // ── Play-by-play renderer ─────────────────────────────────────────────────
-  function renderPlays(plays, rosterMap, limit, filter, periods) {
+  function renderPlays(plays, rosterMap, limit, filter, periods, teams) {
     if (!plays?.length) return '<div style="color:#aaa;font-size:13px;padding:12px 0;text-align:center">No plays yet</div>';
 
     let filtered = plays.filter(p => p.typeDescKey !== 'period-start' && p.typeDescKey !== 'period-end' && p.typeDescKey !== 'game-end' && p.typeDescKey !== 'stoppage' && p.typeDescKey !== 'faceoff');
@@ -519,9 +524,19 @@
       const cls = isGoal ? ' pbp-goal' : isPenalty ? ' pbp-penalty' : '';
       const desc = formatPlay(p, rosterMap);
       if (!desc) return '';
-      return `<div class="pbp-play${cls}">
-        <div class="pbp-inn">${perLabel}</div>
-        <div class="pbp-desc">${desc}</div>
+      const teamId = p.details?.eventOwnerTeamId;
+      const isAway = teams && teamId === teams.awayId;
+      const isHome = teams && teamId === teams.homeId;
+      const teamCls = isAway ? ' pbp-away-play' : isHome ? ' pbp-home-play' : '';
+      const teamTag = isAway ? teams.awayAbbr : isHome ? teams.homeAbbr : '';
+      return `<div class="pbp-play${cls}${teamCls}">
+        <div class="pbp-play-row">
+          <span class="pbp-team-tag">${teamTag}</span>
+          <div class="pbp-play-body">
+            <div class="pbp-inn">${perLabel}</div>
+            <div class="pbp-desc">${desc}</div>
+          </div>
+        </div>
       </div>`;
     }).filter(Boolean).join('');
   }
@@ -655,7 +670,7 @@
             <div class="filter-row" style="padding:0">${periodPills}</div>
           </div>` : ''}
         </div>
-        <div class="ov-sec">${renderPlays(allPlays, rosterMap, 0, ovState.filter, ovState.periods)}</div>`;
+        <div class="ov-sec">${renderPlays(allPlays, rosterMap, 0, ovState.filter, ovState.periods, boxscore ? { awayId: boxscore.awayTeam?.id, homeId: boxscore.homeTeam?.id, awayAbbr: boxscore.awayTeam?.abbrev || 'AWY', homeAbbr: boxscore.homeTeam?.abbrev || 'HME' } : null)}</div>`;
     }
     document.getElementById('ov-body').innerHTML = html;
   }
@@ -814,7 +829,7 @@
         </div>
         <div id="${collId2}" class="coll-body" style="max-height:0">
           <div style="padding-top:4px">
-            ${renderPlays(feed.plays.plays, rosterMap, 5, 'all', null)}
+            ${renderPlays(feed.plays.plays, rosterMap, 5, 'all', null, { awayId: g.awayTeam?.id, homeId: g.homeTeam?.id, awayAbbr: awAbbr, homeAbbr: hmAbbr })}
             <button class="see-all-btn" onclick="openGameOverlay(${g.id},'plays')">See all plays →</button>
           </div>
         </div>

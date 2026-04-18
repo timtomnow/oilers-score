@@ -14,4 +14,4 @@ DAILY_CAP = "50000"
 # Then paste the returned id below.
 [[kv_namespaces]]
 binding = "RATE_KV"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "17b52a4a60a04c76acbbd3c98deda715"
