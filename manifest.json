@@ -1,0 +1,18 @@
+{
+  "name": "Oilers Score",
+  "short_name": "Oilers",
+  "description": "Live Edmonton Oilers score tracker",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#00205B",
+  "theme_color": "#00205B",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
