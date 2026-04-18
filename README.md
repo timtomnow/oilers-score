@@ -29,10 +29,22 @@ A lightweight web app for tracking the Edmonton Oilers — live score, period si
 - Multi-select period filter to focus on specific periods
 
 **Season context**
-- Season record (W-L-OT), winning %, and current streak
-- Full Pacific Division standings with points, games back, and streak
+- Season record (W-L-OT) and division rank with points
+- Full Pacific Division standings
 - Last 5 completed games (W/L/OTL, score, opponent) — each clickable for full game stats and play-by-play
 - Next 3 upcoming scheduled games with date and time
+
+**Other NHL games today**
+- Shows all other NHL games happening on the same day, below the Oilers section
+- Displays live scores with period/clock, final scores, or scheduled start times
+- Each game is tappable — opens the same full stats and play-by-play overlay
+
+**Playoff Picture** *(shown automatically during playoff season)*
+- Trophy button appears at the top of the app when the playoffs are active; hidden off-season
+- Bracket grouped by conference (East / West), with First Round series paired to show who the winner will face next
+- Series rows show the current wins score and series status (leads, tied, eliminated)
+- Advances through Second Round → Conference Finals → Stanley Cup Final as teams are determined
+- Oilers highlighted in orange throughout the bracket
 
 **Auto-refresh**
 - Every 30 seconds during live games
@@ -49,7 +61,7 @@ On **Android** (Chrome): visit the site and tap the "Add to Home Screen" banner 
 
 On **iPhone** (Safari): tap the Share button → "Add to Home Screen".
 
-The app installs with a custom icon and opens full-screen without a browser address bar.
+The app installs with a custom icon and opens full-screen without a browser address bar. Both portrait and landscape orientations are supported.
 
 ## How it works
 

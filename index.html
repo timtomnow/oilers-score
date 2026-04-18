@@ -221,6 +221,39 @@
     .ov-body { overflow-y:auto; flex:1; -webkit-overflow-scrolling:touch; }
     .ov-sec { padding:14px 16px; }
     .ov-filter-wrap { position:sticky; top:0; background:#fff; padding:8px 16px 0; border-bottom:1px solid #f0f0f0; z-index:1; }
+
+    /* ── Playoff button ── */
+    .playoff-btn { display:block; width:100%; background:linear-gradient(135deg,#FF4C00,#ff6b2b); color:#fff; border:none; padding:12px 28px; border-radius:14px; font-size:14px; font-weight:700; cursor:pointer; margin-bottom:10px; letter-spacing:.3px; }
+    .playoff-btn:active { opacity:.88; }
+
+    /* ── Playoff sheet ── */
+    #playoff-bd { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:300; opacity:0; pointer-events:none; transition:opacity .25s; }
+    #playoff-bd.open { opacity:1; pointer-events:auto; }
+    #playoff-sh { position:fixed; left:0; right:0; bottom:0; z-index:301; background:#fff; border-radius:20px 20px 0 0; max-height:90vh; display:flex; flex-direction:column; transform:translateY(102%); transition:transform .3s cubic-bezier(.25,.46,.45,.94); box-shadow:0 -8px 32px rgba(0,0,0,.2); }
+    #playoff-sh.open { transform:translateY(0); }
+    /* Bracket rows */
+    .bp-block { background:#f9f9fb; border-radius:10px; padding:8px 10px; margin-bottom:10px; }
+    .bp-series { display:flex; align-items:center; gap:8px; padding:5px 0; }
+    .bp-letter { font-size:10px; font-weight:800; color:#ccc; letter-spacing:.5px; min-width:12px; flex-shrink:0; }
+    .bp-team { font-size:14px; font-weight:700; color:#1c1c1e; }
+    .bp-oilers { color:#FF4C00; }
+    .bp-winner { color:#FF4C00; }
+    .bp-loser { color:#ccc; font-weight:600; }
+    .bp-score { font-size:12px; font-weight:700; color:#888; background:#fff; border-radius:6px; padding:2px 8px; flex-shrink:0; }
+    .bp-tag { font-size:10px; color:#aaa; margin-left:auto; flex-shrink:0; }
+    .bp-next { font-size:11px; color:#bbb; padding:5px 0 2px; border-top:1px dashed #e8e8e8; margin-top:3px; }
+    .bp-round-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#bbb; margin:10px 0 6px; }
+    .bp-tbd { font-size:13px; color:#ccc; font-style:italic; padding:4px 0; }
+
+    /* ── Landscape adjustments ── */
+    @media (orientation:landscape) and (max-height:500px) {
+      body { padding:6px 16px 16px; }
+      .header { padding:8px 0 6px; }
+      .logo-img { width:40px; height:40px; }
+      .header h1 { font-size:15px; margin-top:4px; }
+      .score-num { font-size:36px; }
+      #app { max-width:640px; }
+    }
   </style>
 </head>
 <body>
@@ -234,9 +267,12 @@
     <p class="date" id="date-label"></p>
   </header>
 
+  <div id="playoff-btn-section"></div>
+
   <div id="game-section"><div class="card"><div class="loading">Loading…</div></div></div>
   <div id="season-section"></div>
   <div id="upcoming-section"></div>
+  <div id="other-games-section"></div>
 
   <div class="footer">
     <button class="refresh-btn" onclick="load()">Refresh</button>
@@ -256,6 +292,16 @@
     <button class="readme-close" onclick="closeReadme()">&#x2715;</button>
   </div>
   <div class="readme-body" id="readme-body"><div class="loading">Loading…</div></div>
+</div>
+
+<div id="playoff-bd" onclick="closePlayoffSheet()"></div>
+<div id="playoff-sh">
+  <div class="ov-handle"></div>
+  <div class="readme-head">
+    <div class="readme-title">&#127942; Playoff Picture</div>
+    <button class="readme-close" onclick="closePlayoffSheet()">&#x2715;</button>
+  </div>
+  <div class="ov-body" id="playoff-body"><div class="loading">Loading…</div></div>
 </div>
 
 <div id="ov-bd" onclick="closeOverlay()"></div>
@@ -334,13 +380,23 @@
     return r.json();
   }
 
-  async function fetchTodayGames(date) {
+  async function fetchAllTodayGames(date) {
     const data = await get(`${NHL_API_BASE}/v1/schedule/${date}`);
     const dayEntry = (data.gameWeek ?? []).find(d => d.date === date) ?? (data.gameWeek ?? [])[0];
-    const games = dayEntry?.games ?? [];
+    return dayEntry?.games ?? [];
+  }
+
+  async function fetchTodayGames(date) {
+    const games = await fetchAllTodayGames(date);
     return games.filter(g =>
       g.awayTeam?.abbrev === TEAM_ABBREV || g.homeTeam?.abbrev === TEAM_ABBREV
     );
+  }
+
+  function fetchPlayoffBracket() {
+    const d = new Date();
+    const year = d.getMonth() < 8 ? d.getFullYear() : d.getFullYear() + 1;
+    return get(`${NHL_API_BASE}/v1/playoff-bracket/${year}`);
   }
 
   function fetchStandings() {
@@ -876,7 +932,6 @@
         <div class="sec-title">${new Date().getFullYear()} Season</div>
         <div class="record-row">
           <span class="record-big">${oilersRec.wins}–${oilersRec.losses}–${otl}</span>
-          ${streak ? `<span class="streak-pill ${sCls}">${streak}</span>` : ''}
           <span class="rank-tag">${rank}${rankSuffix(rank)} Pacific · ${oilersRec.points ?? ''}pts</span>
         </div>
       </div>`;
@@ -886,7 +941,6 @@
       const rows = divTeams.map(r => {
         const abbrev = r.teamAbbrev?.default ?? r.teamAbbrev ?? '—';
         const isOilers = abbrev === TEAM_ABBREV;
-        const str = r.streakCode ?? '';
         const otl = r.otLosses ?? 0;
         return `<tr${isOilers ? ' class="oilers"' : ''}>
           <td>${r.teamCommonName?.default ?? r.teamName?.default ?? abbrev}</td>
@@ -894,13 +948,12 @@
           <td>${r.losses ?? '—'}</td>
           <td>${otl}</td>
           <td>${r.points ?? '—'}</td>
-          <td>${str}</td>
         </tr>`;
       }).join('');
       html += `<div class="sec">
         <div class="sec-title">Pacific Division</div>
         <table class="st-table">
-          <thead><tr><th>Team</th><th>W</th><th>L</th><th>OT</th><th>PTS</th><th>Str</th></tr></thead>
+          <thead><tr><th>Team</th><th>W</th><th>L</th><th>OT</th><th>PTS</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>`;
@@ -993,6 +1046,186 @@
     return html ? `<div class="card">${html}</div>` : '';
   }
 
+  // ── Other NHL Games Today ─────────────────────────────────────────────────
+  function renderOtherGames(allGames) {
+    const others = allGames.filter(g =>
+      g.awayTeam?.abbrev !== TEAM_ABBREV && g.homeTeam?.abbrev !== TEAM_ABBREV
+    );
+    if (!others.length) return '';
+
+    for (const g of others) {
+      gameInfoCache[g.id] = { title: `${g.awayTeam?.abbrev ?? '—'} @ ${g.homeTeam?.abbrev ?? '—'}` };
+    }
+
+    const rows = others.map(g => {
+      const state = g.gameState;
+      const isLive    = state === 'LIVE' || state === 'CRIT';
+      const isFinal   = state === 'FINAL' || state === 'OFF';
+      const awAbbr = g.awayTeam?.abbrev ?? '—';
+      const hmAbbr = g.homeTeam?.abbrev ?? '—';
+      const awScore = g.awayTeam?.score ?? 0;
+      const hmScore = g.homeTeam?.score ?? 0;
+
+      let rightHtml, metaHtml = '';
+      if (isLive) {
+        const perNum  = g.period ?? g.periodDescriptor?.number;
+        const perType = g.periodDescriptor?.periodType;
+        const clock   = g.clock?.timeRemaining ?? '';
+        const inInt   = g.clock?.inIntermission;
+        const perLbl  = perNum ? periodLabel(perNum, perType) : 'Live';
+        const clockLbl = inInt ? 'INT' : clock;
+        metaHtml = `<div class="l5-meta">${perLbl}${clockLbl ? ' · ' + clockLbl : ''}</div>`;
+        rightHtml = `<div class="l5-result b-live">${awScore}–${hmScore}</div>`;
+      } else if (isFinal) {
+        const ot = g.gameOutcome?.lastPeriodType;
+        const suffix = ot && ot !== 'REG' ? `/${ot}` : '';
+        metaHtml = `<div class="l5-meta">Final${suffix}</div>`;
+        rightHtml = `<div class="l5-result b-final">${awScore}–${hmScore}</div>`;
+      } else {
+        rightHtml = `<div class="l5-result b-preview">${fmtTime(g.startTimeUTC)}</div>`;
+      }
+
+      return `<div class="l5-row" onclick="openGameOverlay(${g.id},'stats')">
+        <div class="l5-left">
+          <div class="l5-opp">${awAbbr} @ ${hmAbbr}</div>
+          ${metaHtml}
+        </div>
+        ${rightHtml}
+        <span class="l5-chev">›</span>
+      </div>`;
+    }).join('');
+
+    return `<div class="card">
+      <div class="sec">
+        <div class="sec-title">Other NHL Games Today</div>
+        ${rows}
+      </div>
+    </div>`;
+  }
+
+  // ── Playoff Picture ───────────────────────────────────────────────────────
+  const playoffCache = { data: null };
+
+  async function openPlayoffSheet() {
+    document.getElementById('playoff-bd').classList.add('open');
+    document.getElementById('playoff-sh').classList.add('open');
+    document.body.style.overflow = 'hidden';
+    if (playoffCache.data) { renderPlayoffContent(playoffCache.data); return; }
+    document.getElementById('playoff-body').innerHTML = '<div class="loading" style="padding:40px">Loading…</div>';
+    try {
+      playoffCache.data = await fetchPlayoffBracket();
+      renderPlayoffContent(playoffCache.data);
+    } catch(e) {
+      document.getElementById('playoff-body').innerHTML = `<div class="err" style="padding:20px">Could not load playoff data.<br>${e.message}</div>`;
+    }
+  }
+
+  function closePlayoffSheet() {
+    document.getElementById('playoff-bd').classList.remove('open');
+    document.getElementById('playoff-sh').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  function renderPlayoffContent(bracket) {
+    const allSeries = bracket?.series ?? [];
+    if (!allSeries.length) {
+      document.getElementById('playoff-body').innerHTML = '<div style="color:#aaa;font-size:14px;padding:40px;text-align:center">Playoff bracket not yet available.</div>';
+      return;
+    }
+
+    const byLetter = {};
+    for (const s of allSeries) byLetter[s.seriesLetter] = s;
+
+    // Standard NHL bracket: which two R1 series feed each R2 slot
+    // A+B→I, C+D→J (East); E+F→K, G+H→L (West); I+J→M, K+L→N; M+N→O
+    const pairOf = { A:'B',B:'A', C:'D',D:'C', E:'F',F:'E', G:'H',H:'G', I:'J',J:'I', K:'L',L:'K', M:'N',N:'M' };
+    const feedsTo = { A:'I',B:'I', C:'J',D:'J', E:'K',F:'K', G:'L',H:'L', I:'M',J:'M', K:'N',L:'N', M:'O',N:'O' };
+
+    function seriesWinner(letter) {
+      const s = byLetter[letter];
+      if (!s) return null;
+      if ((s.topSeedWins ?? 0) === 4) return s.topSeedTeam?.abbrev ?? null;
+      if ((s.bottomSeedWins ?? 0) === 4) return s.bottomSeedTeam?.abbrev ?? null;
+      return null;
+    }
+
+    function seriesRow(letter) {
+      const s = byLetter[letter];
+      const top = s?.topSeedTeam, bot = s?.bottomSeedTeam;
+      if (!s || (!top && !bot)) return `<div class="bp-series"><span class="bp-letter">${letter}</span><span class="bp-tbd">TBD</span></div>`;
+      const topW = s.topSeedWins ?? 0, botW = s.bottomSeedWins ?? 0;
+      const topDone = topW === 4, botDone = botW === 4;
+      const topAbbr = top?.abbrev ?? '—', botAbbr = bot?.abbrev ?? '—';
+      const topCls = topAbbr === TEAM_ABBREV ? 'bp-oilers' : topDone ? 'bp-winner' : botDone ? 'bp-loser' : '';
+      const botCls = botAbbr === TEAM_ABBREV ? 'bp-oilers' : botDone ? 'bp-winner' : topDone ? 'bp-loser' : '';
+      let tag = '';
+      if (topDone) tag = `${topAbbr} wins`;
+      else if (botDone) tag = `${botAbbr} wins`;
+      else if (topW > botW) tag = `${topAbbr} leads ${topW}-${botW}`;
+      else if (botW > topW) tag = `${botAbbr} leads ${botW}-${topW}`;
+      else if (topW > 0) tag = `Tied ${topW}-${botW}`;
+      return `<div class="bp-series">
+        <span class="bp-letter">${letter}</span>
+        <span class="bp-team ${topCls}">${topAbbr}</span>
+        <span class="bp-score">${topW}–${botW}</span>
+        <span class="bp-team ${botCls}">${botAbbr}</span>
+        ${tag ? `<span class="bp-tag">${tag}</span>` : ''}
+      </div>`;
+    }
+
+    function pairBlock(lA, lB) {
+      const wA = seriesWinner(lA), wB = seriesWinner(lB);
+      let nextTxt;
+      if (wA && wB) nextTxt = `→ ${wA} vs ${wB} in Round 2`;
+      else if (wA) nextTxt = `→ ${wA} meets winner of ${lB}`;
+      else if (wB) nextTxt = `→ Winner of ${lA} meets ${wB}`;
+      else nextTxt = `→ Winners advance to Round 2`;
+      return `<div class="bp-block">${seriesRow(lA)}${seriesRow(lB)}<div class="bp-next">${nextTxt}</div></div>`;
+    }
+
+    function hasTeams(letter) {
+      const s = byLetter[letter];
+      return !!(s?.topSeedTeam || s?.bottomSeedTeam);
+    }
+
+    function confSection(title, lA, lB, lC, lD, lR2a, lR2b, lCF) {
+      let h = `<div class="ov-sec"><div class="sec-title">${title}</div>`;
+      h += `<div class="bp-round-lbl">First Round</div>`;
+      h += pairBlock(lA, lB);
+      h += pairBlock(lC, lD);
+      if (hasTeams(lR2a) || hasTeams(lR2b)) {
+        h += `<div class="bp-round-lbl">Second Round</div>`;
+        h += seriesRow(lR2a) + seriesRow(lR2b);
+      }
+      if (hasTeams(lCF)) {
+        h += `<div class="bp-round-lbl">Conference Finals</div>`;
+        h += seriesRow(lCF);
+      } else {
+        const wA = seriesWinner(lR2a), wB = seriesWinner(lR2b);
+        if (wA || wB) {
+          const txt = wA && wB ? `${wA} vs ${wB}` : wA ? `${wA} vs TBD` : `TBD vs ${wB}`;
+          h += `<div class="bp-round-lbl">Conference Finals</div><div class="bp-series"><span class="bp-tbd">${txt}</span></div>`;
+        }
+      }
+      return h + `</div>`;
+    }
+
+    let html = confSection('Eastern Conference', 'A','B','C','D','I','J','M');
+    html += confSection('Western Conference', 'E','F','G','H','K','L','N');
+
+    html += `<div class="ov-sec" style="border-top:2px solid #FF4C00"><div class="sec-title" style="color:#FF4C00">Stanley Cup Final</div>`;
+    if (hasTeams('O')) {
+      html += seriesRow('O');
+    } else {
+      const wM = seriesWinner('M'), wN = seriesWinner('N');
+      const txt = wM && wN ? `${wM} vs ${wN}` : wM ? `${wM} vs TBD` : wN ? `TBD vs ${wN}` : 'TBD';
+      html += `<div class="bp-series"><span class="bp-tbd">${txt}</span></div>`;
+    }
+    html += `</div>`;
+
+    document.getElementById('playoff-body').innerHTML = html;
+  }
+
   // ── Main load ─────────────────────────────────────────────────────────────
   async function load() {
     const gameEl   = document.getElementById('game-section');
@@ -1005,11 +1238,15 @@
 
     try {
       const today = localDate();
-      const [games, standingsData, clubData] = await Promise.all([
-        fetchTodayGames(today).catch(() => []),
+      const [allTodayGames, standingsData, clubData, bracketData] = await Promise.all([
+        fetchAllTodayGames(today).catch(() => []),
         fetchStandings().catch(() => null),
         fetchClubSchedule().catch(() => null),
+        fetchPlayoffBracket().catch(() => null),
       ]);
+      const games = allTodayGames.filter(g =>
+        g.awayTeam?.abbrev === TEAM_ABBREV || g.homeTeam?.abbrev === TEAM_ABBREV
+      );
 
       // Fetch feeds for live and final games
       const feedGames = games.filter(g => ['LIVE','CRIT','FINAL','OFF'].includes(g.gameState));
@@ -1030,6 +1267,13 @@
 
       seasonEl.innerHTML = renderSeason(standingsData);
       document.getElementById('upcoming-section').innerHTML = renderBottomCard(clubData);
+      document.getElementById('other-games-section').innerHTML = renderOtherGames(allTodayGames);
+
+      const hasPlayoffs = (bracketData?.series?.length ?? 0) > 0;
+      if (hasPlayoffs) { playoffCache.data = bracketData; }
+      document.getElementById('playoff-btn-section').innerHTML = hasPlayoffs
+        ? `<button class="playoff-btn" onclick="openPlayoffSheet()">&#127942; Playoff Picture</button>`
+        : '';
 
       document.getElementById('updated').textContent =
         'Updated at ' + new Date().toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
