@@ -456,7 +456,7 @@
     const team = boxscore?.playerByGameStats?.[side === 'away' ? 'awayTeam' : 'homeTeam'];
     if (!team) return '<div style="color:#aaa;font-size:13px;padding:8px 0">No stats available</div>';
 
-    const skaters = [...(team.forwards ?? []), ...(team.defensemen ?? [])];
+    const skaters = [...(team.forwards ?? []), ...(team.defense ?? [])];
     const goalies = team.goalies ?? [];
     
     let html = '';
