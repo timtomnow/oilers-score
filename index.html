@@ -784,8 +784,8 @@
     if (isLive) {
       const timeRemaining = clock?.timeRemaining ?? '';
       const inIntermission = clock?.inIntermission ?? false;
-      const awSOG = aw?.sog ?? 0;
-      const hmSOG = hm?.sog ?? 0;
+      const awSOG = feed?.boxscore?.homeTeam?.sog ?? 0;
+      const hmSOG = feed?.boxscore?.awayTeam?.sog ?? 0;
 
       let clockLabel = '';
       if (inIntermission) {
