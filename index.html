@@ -1757,5 +1757,15 @@
   applyTeam(TEAM_ABBREV, false);   // sync theme/logo/title with the saved team before first render
   load();
 </script>
+<script>
+  // Registering a service worker (with a fetch handler) is what lets Android
+  // browsers offer "Install app" instead of just a home-screen shortcut, and it
+  // caches the app shell + help docs for a more consistent offline experience.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+</script>
 </body>
 </html>
